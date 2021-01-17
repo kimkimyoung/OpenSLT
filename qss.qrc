@@ -1,0 +1,11 @@
+<RCC>
+    <qresource prefix="/Images">
+        <file>resource/pcl.jpg</file>
+        <file>resource/file.png</file>
+        <file>resource/open.png</file>
+        <file>resource/save.png</file>
+        <file>resource/green-circle.png</file>
+        <file>resource/red-circle.png</file>
+        <file>resource/close-window.png</file>
+    </qresource>
+</RCC>
