@@ -1,0 +1,10 @@
+/home/kim/PCL-Works/side_scan_mosaic/data/NY_HudsonRiver/000_1400.xtf
+
+
+------------sonar annotaion------------
+object 696 307 Right 46 73
+
+
+
+------------yolo annotaion------------
+object (640, 176) (46, 73)  0.jpg

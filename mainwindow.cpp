@@ -384,8 +384,8 @@ void MainWindow::imageLoad()
     active_logger = (std::unique_ptr<logger>) new logger(logger::log_level::debug);
 
     bool enableSSimage=true;
-    cv::Mat ssImage(WINDOW_H,WINDOW_W,CV_8UC1, cvScalar(0));
-    Mat color_ssImage;
+    Mat ssImage(WINDOW_H,WINDOW_W,CV_8UC1, cvScalar(0));
+    Mat color_ssImage(WINDOW_H,WINDOW_W,CV_8UC3, cvScalar(0));
     Mat rgb;
 
     while(p_simulator->getSimState()!=simState::simStop)
