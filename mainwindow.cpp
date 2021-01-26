@@ -8,13 +8,15 @@
 #include <QDir>
 #include <QDateTime>
 #include <QTextStream>
+#include <QDebug>
 
 #define WINDOW_H 1000
 #define WINDOW_W 2400
-#define COMPENSARION_VALUE 2
+#define COMPENSARION_VALUE 0
 
 #define ALFA 1 // sonar parameters
 #define GAMA 0.01f // sonar parameters
+#define GAIN 1.1f // sonar parameters
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -318,49 +320,42 @@ void MainWindow::setupLabelDialog()
  *                                  sonar image function
  * *********************************************************************************************/
 
-void MainWindow::imageGain(Mat& ssImage, int numSamples)
+void MainWindow::imageGain(Mat& ssImage, pingFrame* p_ping, int ii)
 {
-    for (int i = 0; i < numSamples; i++)
+    if (p_ping->bytesPerSample == 1)
     {
-        if ((int)(ssImage.ptr<unsigned char>(WINDOW_H-1)[i] + ALFA * 10 * log10(numSamples-i) + GAMA * (numSamples-i)) > 255)
-        {
-            ssImage.ptr<unsigned char>(WINDOW_H-1)[i] = 255;
-        }
+        if ((ssImage.ptr<unsigned short>(0)[ii] + ALFA * log10(p_ping->numSamples-ii) + GAMA * (p_ping->numSamples-ii)) > 255)
+            ssImage.ptr<unsigned short>(0)[ii] = 255;
         else
-        {
-            ssImage.ptr<unsigned char>(WINDOW_H-1)[i] = (int)(ssImage.ptr<unsigned char>(WINDOW_H-1)[i] + ALFA * 10 * log10(numSamples-i) + GAMA * (numSamples-i));
-        }
-
-        if ((int)((ssImage.ptr<unsigned char>(WINDOW_H-1)+numSamples)[i] + ALFA * 10 * log10(i) + GAMA * i) > 255)
-        {
-            (ssImage.ptr<unsigned char>(WINDOW_H-1)+numSamples)[i] = 255;
-        }
+            ssImage.ptr<unsigned short>(0)[ii] = ssImage.ptr<unsigned short>(0)[ii] + ALFA * log10(p_ping->numSamples-ii) + GAMA * (p_ping->numSamples-ii);
+        if ((ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] + ALFA * log10(ii) + GAMA * (ii)) > 255)
+            ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] = 255;
         else
-        {
-
-            (ssImage.ptr<unsigned char>(WINDOW_H-1)+numSamples)[i] = (ssImage.ptr<unsigned char>(WINDOW_H-1)+numSamples)[i] + ALFA * 10 * log10(i) + GAMA * i;
-        }
+            ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] = ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] + ALFA * 10 * log10(ii) + GAMA * (ii);
+    }
+    else if (p_ping->bytesPerSample == 2)
+    {
+        if ((ssImage.ptr<unsigned short>(0)[ii] + ALFA * log10(p_ping->numSamples-ii) + GAMA * (p_ping->numSamples-ii)) > 65535)
+            ssImage.ptr<unsigned short>(0)[ii] = 65535;
+        else
+            ssImage.ptr<unsigned short>(0)[ii] = ssImage.ptr<unsigned short>(0)[ii] + ALFA * log10(p_ping->numSamples-ii) + GAMA * (p_ping->numSamples-ii);
+        if ((ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] + ALFA * log10(ii) + GAMA * (ii)) > 65535)
+            ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] = 65535;
+        else
+            ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] = ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] + ALFA * log10(ii) + GAMA * (ii);
     }
 }
 
 void MainWindow::updateMat(cv::Mat* src){
     int ii,jj;
-    unsigned char* ptr_dst;
-    unsigned char* ptr_src;
+    unsigned short* ptr_dst;
+    unsigned short* ptr_src;
     for(ii=src->rows-2; ii>0 || ii==0;ii--){
-        ptr_dst=src->ptr<unsigned char>(ii+1);
-        ptr_src=src->ptr<unsigned char>(ii);
+        ptr_dst=src->ptr<unsigned short>(ii+1);
+        ptr_src=src->ptr<unsigned short>(ii);
         for(jj=0;jj<src->cols;jj++){
             *(ptr_dst+jj)=*(ptr_src+jj);
         }
-    }
-}
-
-void MainWindow::copyToMat(unsigned char * src,unsigned char * dst,unsigned int len, int fBytesPerSample){
-    unsigned int ii;
-    for(ii=0; ii<len; ii++)
-    {
-        dst[ii] = src[fBytesPerSample*ii];
     }
 }
 
@@ -368,8 +363,8 @@ void MainWindow::gray2Color(Mat& gray, Mat& color)
 {
     for (int i = 0; i < gray.rows; i++)
     {
-        uchar *ptr_gray = gray.ptr<uchar>(i);
-        Vec3b *ptr_color = color.ptr<Vec3b>(i);
+        ushort *ptr_gray = gray.ptr<ushort>(i);
+        Vec3s *ptr_color = color.ptr<Vec3s>(i);
         for (int j = 0; j < gray.cols; j++)
         {
             ptr_color[j][0] = abs(0.10 * ptr_gray[j] + COMPENSARION_VALUE);
@@ -384,8 +379,9 @@ void MainWindow::imageLoad()
     active_logger = (std::unique_ptr<logger>) new logger(logger::log_level::debug);
 
     bool enableSSimage=true;
-    Mat ssImage(WINDOW_H,WINDOW_W,CV_8UC1, cvScalar(0));
-    Mat color_ssImage(WINDOW_H,WINDOW_W,CV_8UC3, cvScalar(0));
+    Mat ssImage(WINDOW_H,WINDOW_W,CV_16UC1, cvScalar(0));
+    Mat ssImage8bit(WINDOW_H,WINDOW_W,CV_8UC3, cvScalar(0));
+    Mat color_ssImage(WINDOW_H,WINDOW_W,CV_16UC3, cvScalar(0));
     Mat rgb;
 
     while(p_simulator->getSimState()!=simState::simStop)
@@ -405,27 +401,39 @@ void MainWindow::imageLoad()
                 current_pingNumber = p_ping->pingNumber;
 
                 int window_w = 2 * p_ping->numSamples;
-                ssImage.create(WINDOW_H,window_w,CV_8UC1);
-                color_ssImage.create(ssImage.rows, ssImage.cols, CV_8UC3);
+                ssImage.create(WINDOW_H,window_w,CV_16UC1);
+                ssImage8bit.create(WINDOW_H,window_w,CV_8UC3);
+                color_ssImage.create(ssImage.rows, ssImage.cols, CV_16UC3);
 
                 LOG(info,"Time stamp: "+std::to_string(p_ping->timeStamp)+"No: "+std::to_string(p_ping->pingNumber));       
                 if(enableSSimage)
                 {
                     updateMat(&ssImage);
-                    copyToMat((unsigned char*)p_ping->p_data[0],ssImage.ptr<unsigned char>(0),p_ping->numSamples, p_ping->bytesPerSample);
-                    copyToMat((unsigned char*)p_ping->p_data[1],ssImage.ptr<unsigned char>(0)+p_ping->numSamples, p_ping->numSamples, p_ping->bytesPerSample);
-
-                    imageGain(ssImage, p_ping->numSamples);
+                    for(int ii=0; ii<p_ping->numSamples; ii++)
+                    {
+                        if (p_ping->bytesPerSample == 1)
+                        {
+                            ssImage.ptr<unsigned short>(0)[ii] = *((unsigned char *)(p_ping->p_data[0]) + ii) * GAIN;
+                            ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] = *((unsigned char *)(p_ping->p_data[1]) + ii) * GAIN;
+                            imageGain(ssImage, p_ping, ii);
+                        }
+                        else if (p_ping->bytesPerSample == 2)
+                        {
+                            ssImage.ptr<unsigned short>(0)[ii] = *((unsigned short *)(p_ping->p_data[0]) + ii) * GAIN;
+                            ssImage.ptr<unsigned short>(0)[ii+p_ping->numSamples] = *((unsigned short *)(p_ping->p_data[1]) + ii) * GAIN;
+                            imageGain(ssImage, p_ping, ii);
+                        }
+                    }
                     gray2Color(ssImage, color_ssImage);
-                    cvtColor(color_ssImage, rgb, COLOR_BGR2RGB);
+                    color_ssImage.convertTo(ssImage8bit, CV_8UC3);
+                    cvtColor(ssImage8bit, rgb, COLOR_BGR2RGB);
                 }
             }
-            QImage disImage= QImage((const uchar*)(rgb.data), rgb.cols, rgb.rows, rgb.cols*rgb.channels(), QImage::Format_RGB888);
+            QImage disImage = QImage((const uchar*)(rgb.data), rgb.cols, rgb.rows, rgb.cols*rgb.channels(), QImage::Format_RGB888);
             QPixmap pixmap = QPixmap::fromImage(disImage);
-            pixmap.scaled(ui->label_image->width(), ui->label_image->height(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QPixmap scaled = pixmap.scaled(ui->label_image->width(), ui->label_image->height(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
             ui->label_image->setScaledContents(true);
-            ui->label_image->setPixmap(pixmap);
-
+            ui->label_image->setPixmap(scaled);
             cv::waitKey(20);
         }
         QApplication::processEvents();

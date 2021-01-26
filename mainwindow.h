@@ -74,7 +74,7 @@ private slots:
 
 private:
     Ui::MainWindow *ui;
-    std::string file_path = "/home/kim/PCL-Works/side_scan_mosaic/data/NY_HudsonRiver/000_1400.xtf";
+    std::string file_path = "/home/kim/PCL-Works/ssh-test/cs_ssh_20210107/DefaultPrj/LogData/20210107_105514_01.XTF";
     QString dir_path;
     QStringList file_list;
 
@@ -101,9 +101,8 @@ private:
     int curIdx=0;
 
     /* xtf solver*/
-    void imageGain(cv::Mat& ssImage, int numSamples);
+    void imageGain(cv::Mat& ssImage, pingFrame* p_ping, int ii);
     void updateMat(cv::Mat* src);
-    void copyToMat(unsigned char * src,unsigned char * dst,unsigned int len, int fBytesPerSample);
     void gray2Color(Mat& gray, Mat& color);
     void imageLoad();
 
